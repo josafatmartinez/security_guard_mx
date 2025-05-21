@@ -1,0 +1,51 @@
+name: Auto PR
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'fix/**'
+      - 'enhancement/**'
+
+jobs:
+  auto-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Extract branch info
+        id: branch-info
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BRANCH_TYPE=$(echo $BRANCH_NAME | cut -d'/' -f1)
+          ISSUE_NUMBER=$(echo $BRANCH_NAME | grep -oE '[0-9]+' | head -1 || echo "")
+          PR_TITLE=$(echo $BRANCH_NAME | sed -E 's/^(feature|fix|enhancement)\/([0-9]+-)?//g' | tr '-' ' ' | awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1')
+
+          if [[ "$BRANCH_TYPE" == "feature" ]]; then
+            PR_TITLE="✨ [FEAT] $PR_TITLE"
+          elif [[ "$BRANCH_TYPE" == "fix" ]]; then
+            PR_TITLE="🐛 [FIX] $PR_TITLE"
+          elif [[ "$BRANCH_TYPE" == "enhancement" ]]; then
+            PR_TITLE="🚀 [ENHANCE] $PR_TITLE"
+          fi
+
+          echo "::set-output name=branch_type::$BRANCH_TYPE"
+          echo "::set-output name=issue_number::$ISSUE_NUMBER"
+          echo "::set-output name=pr_title::$PR_TITLE"
+
+      - name: Create PR if not exists
+        id: create-pr
+        run: |
+          PR_EXISTS=$(gh pr list --head $GITHUB_REF_NAME --json number | jq '.[0].number')
+
+          if [[ "$PR_EXISTS" == "null" ]]; then
+            PR_BODY="Closes #${{ steps.branch-info.outputs.issue_number }}"
+            gh pr create --base main --head $GITHUB_REF_NAME --title "${{ steps.branch-info.outputs.pr_title }}" --body "$PR_BODY" --draft
+            echo "::set-output name=created::true"
+          else
+            echo "::set-output name=created::false"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
