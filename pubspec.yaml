@@ -1,5 +1,5 @@
 name: security_guard_mx
-description: "A new Flutter project."
+description: "Security guard management application. Allows supervisors to create checkpoints and routes, while guards can scan QR codes during rounds and report incidents in real time."
 publish_to: 'none'
 version: 0.1.0
 
