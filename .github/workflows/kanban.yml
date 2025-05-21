@@ -1,0 +1,53 @@
+name: Kanban Automatizado
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+jobs:
+  add_to_project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to Kanban project
+        uses: actions/add-to-project@v0.5.0
+        with:
+          project-url: ${{ secrets.PROJECT_URL }}
+          github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+  assign_labels:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
+    steps:
+      - name: Initial triage
+        uses: andymckay/labeler@master
+        with:
+          add-labels: "needs-triage, to-do"
+
+  create_branch:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Create feature branch
+        run: |
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          # Limpiar el título para usarlo como nombre de rama
+          BRANCH_NAME=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          BRANCH_TYPE="feature"
+
+          if [[ "$ISSUE_TITLE" == *"[BUG]"* ]]; then
+            BRANCH_TYPE="fix"
+          fi
+
+          # Crear nueva rama
+          git checkout -b "$BRANCH_TYPE/$ISSUE_NUMBER-$BRANCH_NAME"
+          echo "Rama $BRANCH_TYPE/$ISSUE_NUMBER-$BRANCH_NAME creada localmente"
+
+          # Comentar en el issue
+          gh issue comment "$ISSUE_NUMBER" --body "He creado una rama para este issue: \`$BRANCH_TYPE/$ISSUE_NUMBER-$BRANCH_NAME\`"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
